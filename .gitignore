@@ -5,3 +5,4 @@ tests/make-grade
 utils/backtrace
 utils/pintos
 utils/pintos-mkdisk
+.vscode
