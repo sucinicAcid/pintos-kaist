@@ -92,6 +92,9 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
+	/* Prj 1.1 */
+	int64_t wakeup_ticks;						/* sleep_list에서 wakeup해야 할 ticks시간 */
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -142,5 +145,12 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+/* Prj 1.1 */
+void thread_sleep (int64_t ticks);
+bool cmp_wakeup_ticks (struct list_elem *a, struct list_elem *b, void *aux);
+int64_t get_minimum_wakeup_ticks (void);
+void set_minimum_wakeup_ticks (void);
+void thread_wakeup (void);
 
 #endif /* threads/thread.h */

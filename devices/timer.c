@@ -88,13 +88,26 @@ timer_elapsed (int64_t then) {
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
+/* ticks시간 동안 current_thread를 sleep */
 void
 timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+	// int64_t start = timer_ticks (); // 현재 시각 반환 (OS시작부터 현재까지 진행된 tick 수)
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	
+	/* Busy Waiting 방식 
+	   ticks시간동안 루프를 돌면서 current_thread를 ready_list로 옮기고 schedule을 반복.
+	ticks시간동안 다른 쓰레드에게 CPU를 양보하는게 아니라, 자기가 사용하면서 기다리는 느낌.
+	   비효율적. */
+	// while (timer_elapsed (start) < ticks) 
+	//	  thread_yield ();
+
+	/* Prj 1.1 Alarm방식
+	   current_thread를 ticks시간 동안 sleep_list에 옮김.
+	   ticks시간동안 다른 쓰레드가 CPU 점유.
+	   ticks시간이 지난 후에 ready_list로 옮김.
+	   */
+	thread_sleep (timer_ticks () + ticks);	// 현재 시각 + ticks 까지 thread_sleep
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -122,10 +135,15 @@ timer_print_stats (void) {
 }
 
 /* Timer interrupt handler. */
+/* 매 틱마다 호출된다. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
-	thread_tick ();
+	thread_tick (); // CPU 사용률 통계를 위해 계산
+
+	/* Prj 1.1 */
+	if (get_minimum_wakeup_ticks () <= ticks)
+		thread_wakeup ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

@@ -28,6 +28,16 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* Prj 1.1 */
+static struct list sleep_list; // THREAD_BLOCKED 상태의 쓰레드 리스트
+/* sleep_list 쓰레드의 wakeup_ticks 중 가장 작은 값.
+   매 timer interrupt handler 실행 시에 sleep_list 쓰레드 중 wakeup_ticks가 지났는지 확인해야한다.
+   이때 매번 sleep_list를 순회하는 것을 방지하기 위해 minimum_wakeup_ticks를 사용한다.
+   
+   1. 매 timer interrupt handler 실행 시에 (wakeup_ticks > ticks) 인지 확인한다.
+   2. 만약 (wakeup_ticks <= ticks)라면, sleep_list를 순회하여 wakeup_ticks를 가진 쓰레드를 ready_list로 옮긴다. */
+static int64_t minimum_wakeup_ticks;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -109,6 +119,10 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+
+	/* Prj 1.1 */
+	list_init (&sleep_list);
+	minimum_wakeup_ticks = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -587,4 +601,63 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+/* Prj 1.1 
+   ticks 시각까지 현재 쓰레드를 sleep_list에 저장 */
+void
+thread_sleep (int64_t ticks) {
+	struct thread *curr = thread_current();
+	enum intr_level old_level = intr_disable();
+	
+	if (curr != idle_thread) {
+		curr->wakeup_ticks = ticks;
+		list_insert_ordered (&sleep_list, &curr->elem, cmp_wakeup_ticks, NULL);
+		set_minimum_wakeup_ticks();
+		thread_block();
+	}
+
+	intr_set_level(old_level);
+}
+
+/* Prj 1.1
+   쓰레드 리스트에서 wakeup_ticks 기준으로 오름차순 정렬 */
+bool
+cmp_wakeup_ticks (struct list_elem *a, struct list_elem *b, void *aux) {
+	return list_entry (a, struct thread, elem)->wakeup_ticks
+			< list_entry (b, struct thread, elem)->wakeup_ticks;
+}
+
+/* Prj 1.1
+   minimum_wakeup_ticks의 getter */
+int64_t
+get_minimum_wakeup_ticks (void) {
+	return minimum_wakeup_ticks;
+}
+
+/* Prj 1.1
+   minimum_wakeup_ticks의 setter */
+void
+set_minimum_wakeup_ticks (void) {
+	if (list_empty (&sleep_list)) 
+		minimum_wakeup_ticks = INT64_MAX;
+	else 
+		minimum_wakeup_ticks = list_entry (list_begin (&sleep_list), struct thread, elem)->wakeup_ticks;
+}
+
+/* Prj 1.1
+   ticks보다 작거나 같은 wakeup_ticks를 가진 쓰레드들을 ready_list로 옮김 */
+void
+thread_wakeup (void) {
+	struct list_elem *e, *next;
+	for (e = list_begin (&sleep_list); e != list_end (&sleep_list);) {
+		struct thread *t = list_entry (e, struct thread, elem);
+		if (t->wakeup_ticks <= timer_ticks()) {
+			next = list_next(e);
+			list_remove(e);
+			thread_unblock(t);
+			e = next;
+		} else break;
+	}
+	set_minimum_wakeup_ticks();
 }
