@@ -220,7 +220,12 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-
+	
+	/* Prj 1.2 
+	생성한 쓰레드가 현재 쓰레드보다 우선순위가 높다면 yield */
+	if (thread_get_priority () < t->priority)
+	thread_yield ();
+	
 	return tid;
 }
 
@@ -254,7 +259,9 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	// list_push_back (&ready_list, &t->elem);
+	/* Prj 1.2 */
+	list_insert_ordered (&ready_list, &t->elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -317,7 +324,9 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		// list_push_back (&ready_list, &curr->elem);
+		/* Prj 1.2 */
+		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -326,6 +335,15 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+
+	/* Prj 1.2 
+	   현재 쓰레드의 우선순위가 ready_list의 최고 우선순위보다 낮다면,
+	   최고 우선순위 쓰레드로 변경 */
+	if (list_empty (&ready_list))
+		return;
+	struct thread *t = list_entry (list_begin (&ready_list), struct thread, elem);
+	if (thread_get_priority () < t->priority)
+		thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -660,4 +678,12 @@ thread_wakeup (void) {
 		} else break;
 	}
 	set_minimum_wakeup_ticks();
+}
+
+/* Prj 1.1
+   쓰레드 리스트에서 prioity 기준으로 내림차순 정렬 */
+bool
+cmp_priority (struct list_elem *a, struct list_elem *b, void *aux) {
+	return list_entry (a, struct thread, elem)->priority
+			> list_entry (b, struct thread, elem)->priority;
 }

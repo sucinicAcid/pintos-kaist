@@ -153,4 +153,7 @@ int64_t get_minimum_wakeup_ticks (void);
 void set_minimum_wakeup_ticks (void);
 void thread_wakeup (void);
 
+/* Prj 1.2 */
+bool cmp_priority (struct list_elem *a, struct list_elem *b, void *aux);
+
 #endif /* threads/thread.h */
