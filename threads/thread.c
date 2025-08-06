@@ -224,7 +224,7 @@ thread_create (const char *name, int priority,
 	/* Prj 1.2 
 	생성한 쓰레드가 현재 쓰레드보다 우선순위가 높다면 yield */
 	if (thread_get_priority () < t->priority)
-	thread_yield ();
+		thread_yield ();
 	
 	return tid;
 }
