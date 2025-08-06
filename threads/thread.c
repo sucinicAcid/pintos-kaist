@@ -336,14 +336,8 @@ void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
 
-	/* Prj 1.2 
-	   현재 쓰레드의 우선순위가 ready_list의 최고 우선순위보다 낮다면,
-	   최고 우선순위 쓰레드로 변경 */
-	if (list_empty (&ready_list))
-		return;
-	struct thread *t = list_entry (list_begin (&ready_list), struct thread, elem);
-	if (thread_get_priority () < t->priority)
-		thread_yield ();
+	/* Prj 1.2 */
+	thread_try_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -686,4 +680,16 @@ bool
 cmp_priority (struct list_elem *a, struct list_elem *b, void *aux) {
 	return list_entry (a, struct thread, elem)->priority
 			> list_entry (b, struct thread, elem)->priority;
+}
+
+/* Prj 1.2 
+   현재 쓰레드의 우선순위가 ready_list의 최고 우선순위보다 낮다면,
+   최고 우선순위 쓰레드로 변경 */	
+void
+thread_try_yield (void) {
+	if (list_empty (&ready_list))
+		return;
+	struct thread *t = list_entry (list_begin (&ready_list), struct thread, elem);
+	if (thread_get_priority () < t->priority)
+		thread_yield ();
 }

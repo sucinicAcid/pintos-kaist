@@ -155,5 +155,6 @@ void thread_wakeup (void);
 
 /* Prj 1.2 */
 bool cmp_priority (struct list_elem *a, struct list_elem *b, void *aux);
+void thread_try_yield (void);
 
 #endif /* threads/thread.h */
