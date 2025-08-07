@@ -221,7 +221,7 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 	
-	/* Prj 1.2 
+	/* Prj 1.2 Priority Scheduling 
 	생성한 쓰레드가 현재 쓰레드보다 우선순위가 높다면 yield */
 	if (thread_get_priority () < t->priority)
 		thread_yield ();
@@ -260,7 +260,7 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	// list_push_back (&ready_list, &t->elem);
-	/* Prj 1.2 */
+	/* Prj 1.2 Priority Scheduling */
 	list_insert_ordered (&ready_list, &t->elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -325,7 +325,7 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread)
 		// list_push_back (&ready_list, &curr->elem);
-		/* Prj 1.2 */
+		/* Prj 1.2 Priority Scheduling */
 		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
@@ -336,7 +336,12 @@ void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
 
-	/* Prj 1.2 */
+	/* Prj 1.2 Priority Donation
+	   donations 쓰레드의 우선순위가 더 크다면 그것으로 update */
+	thread_current ()->ori_priority = new_priority;
+	update_priority_by_donations ();
+
+	/* Prj 1.2 Priority Scheduling */
 	thread_try_yield ();
 }
 
@@ -435,6 +440,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	/* Prj 1.2 Priority Donation */
+	list_init(&t->donations);
+	t->wait_on_lock = NULL;
+	t->ori_priority = priority;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -682,7 +692,7 @@ cmp_priority (struct list_elem *a, struct list_elem *b, void *aux) {
 			> list_entry (b, struct thread, elem)->priority;
 }
 
-/* Prj 1.2 
+/* Prj 1.2 Priority Scheduling
    현재 쓰레드의 우선순위가 ready_list의 최고 우선순위보다 낮다면,
    최고 우선순위 쓰레드로 변경 */	
 void
@@ -692,4 +702,18 @@ thread_try_yield (void) {
 	struct thread *t = list_entry (list_begin (&ready_list), struct thread, elem);
 	if (thread_get_priority () < t->priority)
 		thread_yield ();
+}
+
+/* Prj 1.2 Priority Donation
+   donations 쓰레드의 우선순위가 높다면 그것으로 현재 우선순위와 nested된 우선순위를 update*/
+void
+update_priority_by_donations (void) {
+	struct thread *curr = thread_current ();
+	curr->priority = curr->ori_priority;
+
+	if (!list_empty (&curr->donations)) {
+		struct thread *front = list_entry (list_begin (&curr->donations), struct thread, d_elem);
+		if (front->priority > curr->priority)
+			curr->priority = front->priority;
+	}
 }

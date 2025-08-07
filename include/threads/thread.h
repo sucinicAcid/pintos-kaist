@@ -95,6 +95,12 @@ struct thread {
 	/* Prj 1.1 */
 	int64_t wakeup_ticks;						/* sleep_list에서 wakeup해야 할 ticks시간 */
 
+	/* Prj 1.2 Priority Donation */
+	struct list donations;
+	struct list_elem d_elem;
+	struct lock *wait_on_lock;
+	int ori_priority;
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -153,8 +159,11 @@ int64_t get_minimum_wakeup_ticks (void);
 void set_minimum_wakeup_ticks (void);
 void thread_wakeup (void);
 
-/* Prj 1.2 */
+/* Prj 1.2 Priority Scheduling */
 bool cmp_priority (struct list_elem *a, struct list_elem *b, void *aux);
 void thread_try_yield (void);
+
+/* Prj 1.2 Priority Donation */
+void update_priority_by_donations (void);
 
 #endif /* threads/thread.h */

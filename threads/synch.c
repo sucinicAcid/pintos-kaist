@@ -67,7 +67,7 @@ sema_down (struct semaphore *sema) {
 	old_level = intr_disable ();
 	while (sema->value == 0) {
 		// list_push_back (&sema->waiters, &thread_current ()->elem);
-		/* Prj 1.2 */
+		/* Prj 1.2 Priority Scheduling */
 		list_insert_ordered (&sema->waiters, &thread_current ()->elem, cmp_priority, NULL);
 		thread_block ();
 	}
@@ -112,13 +112,13 @@ sema_up (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters)) {
-		/* Prj 1.2 */
+		/* Prj 1.2 Priority Scheduling */
 		list_sort (&sema->waiters, cmp_priority, NULL);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
 	}
 	sema->value++;
-	/* Prj 1.2 */
+	/* Prj 1.2 Priority Scheduling */
 	thread_try_yield ();
 	intr_set_level (old_level);
 }
@@ -195,6 +195,22 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	/* Prj 1.2 Priority Donation */
+	if (lock->holder) {
+		struct thread *th = thread_current ();
+		int priority = th->priority;
+
+		// wait_on_lock 연결, donations 리스트에 연결
+		th->wait_on_lock = lock;
+		list_insert_ordered (&lock->holder->donations, &th->d_elem, cmp_priority, NULL);
+		
+		// update priority. multiple donation, nested donation 모두 적용
+		while (th->wait_on_lock && th->wait_on_lock->holder && th->wait_on_lock->holder->priority < priority) {
+			th = th->wait_on_lock->holder;
+			th->priority = priority;
+		}
+	}
+
 	sema_down (&lock->semaphore);
 	lock->holder = thread_current ();
 }
@@ -230,6 +246,21 @@ lock_release (struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	lock->holder = NULL;
+	/* Prj 1.2 Priority Donation */
+	// 현재 쓰레드의 donations 리스트에서 lock을 원하는 쓰레드들을 삭제
+	struct thread *th = thread_current ();
+	struct list_elem *curr = list_begin (&th->donations);
+	while (curr != list_end (&th->donations)) {
+		struct thread *curr_th = list_entry (curr, struct thread, d_elem);
+		if (curr_th->wait_on_lock == lock)
+			curr = list_remove (curr);
+		else
+			curr = list_next (curr);
+	}
+	
+	// donations 리스트에 남은 쓰레드 중 가장 높은 우선순위로 현재 쓰레드 우선순위 update
+	update_priority_by_donations ();
+
 	sema_up (&lock->semaphore);
 }
 
@@ -290,7 +321,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	sema_init (&waiter.semaphore, 0);
 	// list_push_back (&cond->waiters, &waiter.elem);
-	/* Prj 1.2 */
+	/* Prj 1.2 Priority Scheduling */
 	list_insert_ordered (&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
@@ -312,7 +343,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters)) {
-		/* Prj 1.2 */
+		/* Prj 1.2 Priority Scheduling */
 		list_sort (&cond->waiters, cmp_sem_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
@@ -334,7 +365,7 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 		cond_signal (cond, lock);
 }
 
-/* Prj 1.2 */
+/* Prj 1.2 Priority Scheduling */
 bool
 cmp_sem_priority (struct list_elem *a, struct list_elem *b, void *aux) {
 	struct semaphore_elem *sem_a = list_entry (a, struct semaphore_elem, elem);
