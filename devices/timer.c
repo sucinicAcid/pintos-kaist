@@ -141,6 +141,18 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick (); // CPU 사용률 통계를 위해 계산
 
+	/* Prj 1.3 */
+	if (thread_mlfqs) {
+		inc_recent_cpu ();
+		if (ticks % TIMER_FREQ == 0) {
+			calc_load_avg ();
+			recalc_recent_cpu_all ();
+		}
+		if (ticks % 4 == 0) {
+			recalc_priority_all ();
+		}
+	}
+
 	/* Prj 1.1 */
 	if (get_minimum_wakeup_ticks () <= ticks)
 		thread_wakeup ();

@@ -195,19 +195,22 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
-	/* Prj 1.2 Priority Donation */
-	if (lock->holder) {
-		struct thread *th = thread_current ();
-		int priority = th->priority;
-
-		// wait_on_lock 연결, donations 리스트에 연결
-		th->wait_on_lock = lock;
-		list_insert_ordered (&lock->holder->donations, &th->d_elem, cmp_priority, NULL);
-		
-		// update priority. multiple donation, nested donation 모두 적용
-		while (th->wait_on_lock && th->wait_on_lock->holder && th->wait_on_lock->holder->priority < priority) {
-			th = th->wait_on_lock->holder;
-			th->priority = priority;
+	/* Prj 1.3 */
+	if (!thread_mlfqs) {
+		/* Prj 1.2 Priority Donation */
+		if (lock->holder) {
+			struct thread *th = thread_current ();
+			int priority = th->priority;
+	
+			// wait_on_lock 연결, donations 리스트에 연결
+			th->wait_on_lock = lock;
+			list_insert_ordered (&lock->holder->donations, &th->d_elem, cmp_priority, NULL);
+			
+			// update priority. multiple donation, nested donation 모두 적용
+			while (th->wait_on_lock && th->wait_on_lock->holder && th->wait_on_lock->holder->priority < priority) {
+				th = th->wait_on_lock->holder;
+				th->priority = priority;
+			}
 		}
 	}
 
@@ -246,20 +249,23 @@ lock_release (struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	lock->holder = NULL;
-	/* Prj 1.2 Priority Donation */
-	// 현재 쓰레드의 donations 리스트에서 lock을 원하는 쓰레드들을 삭제
-	struct thread *th = thread_current ();
-	struct list_elem *curr = list_begin (&th->donations);
-	while (curr != list_end (&th->donations)) {
-		struct thread *curr_th = list_entry (curr, struct thread, d_elem);
-		if (curr_th->wait_on_lock == lock)
-			curr = list_remove (curr);
-		else
-			curr = list_next (curr);
+	/* Prj 1.3 */
+	if (!thread_mlfqs) {
+		/* Prj 1.2 Priority Donation */
+		// 현재 쓰레드의 donations 리스트에서 lock을 원하는 쓰레드들을 삭제
+		struct thread *th = thread_current ();
+		struct list_elem *curr = list_begin (&th->donations);
+		while (curr != list_end (&th->donations)) {
+			struct thread *curr_th = list_entry (curr, struct thread, d_elem);
+			if (curr_th->wait_on_lock == lock)
+				curr = list_remove (curr);
+			else
+				curr = list_next (curr);
+		}
+		
+		// donations 리스트에 남은 쓰레드 중 가장 높은 우선순위로 현재 쓰레드 우선순위 update
+		update_priority_by_donations ();
 	}
-	
-	// donations 리스트에 남은 쓰레드 중 가장 높은 우선순위로 현재 쓰레드 우선순위 update
-	update_priority_by_donations ();
 
 	sema_up (&lock->semaphore);
 }

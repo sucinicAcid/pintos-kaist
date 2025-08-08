@@ -101,6 +101,11 @@ struct thread {
 	struct lock *wait_on_lock;
 	int ori_priority;
 
+	/* Prj 1.3 */
+	int nice;
+	int recent_cpu;
+	struct list_elem all_elem;
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -165,5 +170,13 @@ void thread_try_yield (void);
 
 /* Prj 1.2 Priority Donation */
 void update_priority_by_donations (void);
+
+/* Prj 1.3 */
+void calc_priority (struct thread *th);
+void calc_recent_cpu (struct thread *th);
+void calc_load_avg (void);
+void inc_recent_cpu (void);
+void recalc_priority_all (void);
+void recalc_recent_cpu_all (void);
 
 #endif /* threads/thread.h */
