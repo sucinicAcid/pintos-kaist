@@ -751,8 +751,12 @@ thread_try_yield (void) {
 	if (list_empty (&ready_list))
 		return;
 	struct thread *t = list_entry (list_begin (&ready_list), struct thread, elem);
-	if (thread_get_priority () < t->priority)
-		thread_yield ();
+	if (thread_get_priority () < t->priority) {
+		if (intr_context ()) // 현재 인터럽트를 처리중이라면
+			intr_yield_on_return (); // 인터럽트를 끝나고 yield를 해라
+		else
+			thread_yield ();
+	}
 }
 
 /* Prj 1.2 Priority Donation
