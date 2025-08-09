@@ -6,3 +6,4 @@ utils/backtrace
 utils/pintos
 utils/pintos-mkdisk
 .vscode
+userprog/build
